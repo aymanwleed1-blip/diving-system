@@ -1,0 +1,6 @@
+{
+  "name": "RSEAS Offshore Dive Control System (ODCS)",
+  "description": "Professional multi-dive offshore commercial diving management system with US Navy repetitive dive tracking, pressure group logic, and live operation control.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["realtime_database", "auth", "pwa"]
+}

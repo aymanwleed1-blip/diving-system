@@ -1,0 +1,102 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information and roles.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "superintendent", "supervisor", "viewer"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "isApproved": { "type": "boolean" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Project": {
+      "title": "Diving Project",
+      "description": "Information about a specific diving operation/contract.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "location": { "type": "string" },
+        "clientName": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "completed", "archived"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["name", "status"]
+    },
+    "DiveLog": {
+      "title": "Dive Log",
+      "description": "Record of an individual dive.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "diverName": { "type": "string" },
+        "diverId": { "type": "string" },
+        "supervisorId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "startTime": { "type": "string", "format": "date-time" },
+        "endTime": { "type": "string", "format": "date-time" },
+        "maxDepth": { "type": "number" },
+        "bottomTime": { "type": "number" },
+        "gasType": { "type": "string", "enum": ["Air", "Nitrox"] },
+        "waterTemp": { "type": "number" },
+        "weather": { "type": "string" },
+        "equipment": { "type": "string" },
+        "notes": { "type": "string" },
+        "isApproved": { "type": "boolean" },
+        "approvedBy": { "type": "string" },
+        "customFields": { "type": "object" },
+        "status": { "type": "string", "enum": ["in-progress", "completed", "submitted", "approved"] },
+        "pressureGroupStart": { "type": "string" },
+        "pressureGroupEnd": { "type": "string" }
+      },
+      "required": ["diverName", "date", "status"]
+    },
+    "FormTemplate": {
+      "title": "Custom Form Template",
+      "description": "User-defined form structures for specific projects or clients.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "fields": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["name", "fields"]
+    },
+    "AuditLog": {
+      "title": "Audit Log",
+      "description": "Tracks every critical action in the system.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "username": { "type": "string" },
+        "role": { "type": "string" },
+        "action": { "type": "string" },
+        "entityId": { "type": "string" },
+        "entityType": { "type": "string" },
+        "oldValue": { "type": "object" },
+        "newValue": { "type": "object" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "action", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": "User", "description": "User profiles" },
+    "/projects/{projectId}": { "schema": "Project", "description": "Diving projects" },
+    "/activedives/{diveId}": { "schema": "DiveLog", "description": "Real-time active dives" },
+    "/completedlogs/{diveId}": { "schema": "DiveLog", "description": "Permanent archived dive records" },
+    "/formTemplates/{templateId}": { "schema": "FormTemplate", "description": "Dynamic form templates" },
+    "/auditLogs/{logId}": { "schema": "AuditLog", "description": "System audit trail" }
+  }
+}

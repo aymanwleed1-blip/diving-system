@@ -1,0 +1,122 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      // Small optimization: if we are reading the user's own doc, we can use resource.data if it exists
+      // but usually we need it for cross-collection checks.
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (request.auth.token.email == 'ayman.wleed1@gmail.com' || getUserData().role == 'admin');
+    }
+
+    function isSuperintendent() {
+      return isSignedIn() && (getUserData().role == 'superintendent' || isAdmin());
+    }
+
+    function isSupervisor() {
+      return isSignedIn() && (getUserData().role == 'supervisor' || isSuperintendent());
+    }
+
+    function isViewer() {
+      return isSignedIn() && (getUserData().role == 'viewer' || isSupervisor());
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Validation Blueprints ---
+
+    function isValidUser(data) {
+      return data.uid is string && data.uid.size() <= 128 &&
+             data.email is string && data.email.size() <= 256 &&
+             data.role in ['admin', 'superintendent', 'supervisor', 'viewer'];
+    }
+
+    function isValidDiveLog(data) {
+      return data.diverName is string && data.diverName.size() <= 256 &&
+             data.status in ['in-progress', 'completed', 'submitted', 'approved'] &&
+             data.date is string && // Simple date string or timestamp
+             (!('bottomTime' in data) || data.bottomTime is number) &&
+             (!('maxDepth' in data) || data.maxDepth is number);
+    }
+
+    // --- User Profiles ---
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == userId && 
+                    isValidUser(incoming()) &&
+                    (incoming().role == 'viewer' || request.auth.token.email == 'ayman.wleed1@gmail.com') &&
+                    incoming().uid == userId;
+      allow update: if (isAdmin() && isValidUser(incoming())) || 
+                    (isSignedIn() && request.auth.uid == userId && 
+                     incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'updatedAt', 'lastLogin']) &&
+                     incoming().uid == existing().uid && 
+                     incoming().role == existing().role); // Cannot change own role
+    }
+
+    // --- Projects ---
+    match /projects/{projectId} {
+      allow get: if isViewer();
+      allow list: if isViewer();
+      allow create: if isSuperintendent();
+      allow update: if isSuperintendent();
+      allow delete: if isAdmin();
+    }
+
+    // --- Dive Logs (Active & Completed) ---
+    function diveAccessCheck() {
+      return isViewer();
+    }
+
+    match /activedives/{diveId} {
+      allow get, list: if diveAccessCheck();
+      allow create: if isSupervisor() && isValidDiveLog(incoming());
+      allow update: if isSupervisor() && isValidDiveLog(incoming());
+      allow delete: if isSupervisor(); // Allow supervisor to delete (end dive move)
+    }
+
+    match /completedlogs/{diveId} {
+      allow get, list: if diveAccessCheck();
+      allow create: if isSupervisor() && isValidDiveLog(incoming());
+      allow update: if isAdmin(); // Only Admin can edit permanent logs
+      allow delete: if isAdmin(); // Only Admin can delete permanent logs
+    }
+
+    // --- Form Templates ---
+    match /formTemplates/{templateId} {
+      allow read: if isViewer();
+      allow create, update: if isSuperintendent();
+      allow delete: if isAdmin();
+    }
+
+    // --- Audit Logs ---
+    match /auditLogs/{logId} {
+      allow get: if isSuperintendent();
+      allow list: if isSuperintendent();
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && incoming().timestamp == request.time;
+      allow update, delete: if false;
+    }
+  }
+}

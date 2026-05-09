@@ -1,0 +1,86 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (getUserData().role == 'admin' || request.auth.token.email == 'ayman.wleed1@gmail.com');
+    }
+
+    function isSuperintendent() {
+      return isSignedIn() && (getUserData().role == 'superintendent' || isAdmin());
+    }
+
+    function isSupervisor() {
+      return isSignedIn() && (getUserData().role == 'supervisor' || isSuperintendent());
+    }
+
+    function isViewer() {
+      return isSignedIn() && (getUserData().role == 'viewer' || isSupervisor());
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- User Profiles ---
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == userId && (
+        incoming().role == 'viewer' || isAdmin()
+      ) && incoming().uid == userId;
+      allow update: if isAdmin() || (isSignedIn() && request.auth.uid == userId && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'updatedAt']));
+    }
+
+    // --- Projects ---
+    match /projects/{projectId} {
+      allow read: if isViewer();
+      allow create: if isSuperintendent();
+      allow update: if isSuperintendent();
+      allow delete: if isAdmin();
+    }
+
+    // --- Dive Logs ---
+    match /diveLogs/{diveLogId} {
+      allow read: if isViewer();
+      allow create: if isSupervisor();
+      allow update: if (isSupervisor() && existing().status != 'approved') || isSuperintendent();
+      allow delete: if isAdmin();
+    }
+
+    // --- Form Templates ---
+    match /formTemplates/{templateId} {
+      allow read: if isViewer();
+      allow create, update: if isSuperintendent();
+      allow delete: if isAdmin();
+    }
+
+    // --- Audit Logs ---
+    match /auditLogs/{logId} {
+      allow read: if isSuperintendent();
+      allow create: if isSignedIn(); // Logged by client, but only if they are performing an action
+      allow update, delete: if false;
+    }
+  }
+}
